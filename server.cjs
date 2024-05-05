@@ -22,9 +22,6 @@ function generateFilename(base64String) {
   return hash + '.pdf';
 }
 
-app.get('/', (req, res) => {
-  res.send('Hello World!');
-});
 
 app.post('/upload', async (req, res) => {
   try {
