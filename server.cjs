@@ -1,7 +1,6 @@
 const fs = require("fs");
-const sharp = require("sharp");
 const express = require("express");
-const PDFDocument = require("pdfkit");
+const puppeteer = require("puppeteer");
 const fileUpload = require("express-fileupload");
 
 const app = express();
@@ -9,38 +8,33 @@ const port = 9000;
 
 app.use(fileUpload());
 app.use(express.static("public"));
+app.use(express.json()); // Add this middleware to parse JSON bodies
+app.use(express.urlencoded({ extended: true })); // Add this middleware to parse URL-encoded bodies
 
 app.post("/upload", async (req, res) => {
   try {
-    if (!req.files || !req.files.image) {
-      return res.status(400).send("No image uploaded.");
+    if (!req.body.url) {
+      return res.status(400).send("No URL provided.");
     }
 
-    const imageData = Buffer.from(req.files.image.data);
-    const resizedImage = await sharp(imageData)
-      .resize({ width: 500 })
-      .toBuffer();
-    const file = imageData.toString("base64").substring(0, 2) + ".pdf";
-    const writeStream = fs.createWriteStream(file);
+    const url = req.body.url;
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: "networkidle2" });
 
-    const doc = new PDFDocument();
-    doc.image(resizedImage, 50, 50);
-    doc.pipe(writeStream);
-    doc.end();
+    const pdfBuffer = await page.pdf({ format: "A4" });
 
-    writeStream.on("finish", () => {
-      res.download(file, "output.pdf", (err) => {
-        if (err) {
-          console.error("Error downloading file:", err);
-          return res.status(500).send("Error downloading file.");
-        }
-        fs.unlinkSync(file);
-      });
-    });
+    await browser.close();
 
-    doc.on("error", (err) => {
-      console.error("PDFKit error:", err);
-      res.status(500).send("PDFKit error.");
+    const file = "output.pdf";
+    fs.writeFileSync(file, pdfBuffer);
+
+    res.download(file, "output.pdf", (err) => {
+      if (err) {
+        console.error("Error downloading file:", err);
+        return res.status(500).send("Error downloading file.");
+      }
+      fs.unlinkSync(file);
     });
   } catch (error) {
     console.error("Error:", error);
